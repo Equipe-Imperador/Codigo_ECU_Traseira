@@ -13,11 +13,13 @@
 
 // PROTÓTIPO DAS FUNÇÕES
 void PulsoRPM(); //RPM
+void PulsoVelocidade(); // Pulsos Velocidade
+unsigned int Velocidade();
 
 //COMBUSTIVEL
-#define S1 PB4
-#define S2 PB3
-#define S3 PA15
+#define PIN_COMB1 9
+#define PIN_COMB2 8
+#define PIN_COMB3 7
 float valorTotal; //VARIAVEL PARA CALCULO DO TEMPO TOTAL
 float desceLed; //VARIAVEL PARA DESCER OS LEDS
 int ledsComb; //NÚMERO DE LEDS ACESOS
@@ -36,20 +38,19 @@ unsigned long int Tempo = 0;
 //RPM
 #define PIN_RPM 2
 volatile unsigned long int RPM = 0;
-volatile unsigned long int TempoPassado = 0; 
-// essas variáveis são declaradas como volatile para garantir seu correto funcionamento na ISR e código normal
+volatile unsigned long int TempoRPM = 0; // Tempo do último pulso
+// Essas variáveis são declaradas como volatile para garantir seu correto funcionamento na ISR e código normal
 
 
 
 //VELOCIDADE
-#define VEL_IN PB9 //LEITURA DO SINAL DO SENSOR
-float diametro = 0.51916;  //DIAMETRO EFETIVO DA RODA EM METROS
-float pi = 3.1416;
-float comp_total = pi * diametro; //COMPRIMENTO DO CIRCULO DO SENSOR CAPACITIVO
-float comp_parcial = comp_total / 3.00; //COMO O CIRCULO POSSUI 3 GOMOS IGUAIS, PODEMOS DIVIDILO EM 3
-int vel = 0; //VELOCIDADE EM KM/HR
-int vel1 = 0; //VELOCIDADE EM T INSTANTES ANTES
-int tempoVelRPM = 0;
+#define PIN_Vel 3 
+#define DIAMETRO 0.51916  // Diametro efetivo da roda em metros
+#define COMPRIMENTO (PI * DIAMETRO) // Comprimento da roda
+#define CRISTAS 3 // Homocinética tem 3 cristas que vão ser captadas pelo sensor indutivo
+unsigned int Vel = 0;
+volatile unsigned long int RPM_Homo = 0; // Variável para salvar o RPM da homocinetica
+volatile unsigned long int TempoVel = 0; // Tempo do último pulso
 
 
 void setup() 
@@ -60,6 +61,7 @@ void setup()
       O modo utilizado chama a interrupção quando o estado o pino for de LOW para HIGH
    */
   attachInterrupt(digitalPinToInterrupt(PIN_RPM), PulsoRPM, RISING);
+  attachInterrupt(digitalPinToInterrupt(PIN_Vel), PulsoVelocidade, RISING);
   // Definição dos pinos
   
   // Cria Comunicação Serial
@@ -77,9 +79,67 @@ void setup()
 
 void loop() 
 {
- noInterrupts(); // Desativa interrupções para enviar a MsgCAN
- interrupts(); // Ativa interrupções
+  Tempo = millis();
+  noInterrupts(); // Desativa interrupções para enviar a MsgCAN
+  if(Tempo%215 == 0) // Leitura de dados a cada 215 milissegundos
+  {
+    Vel = Velocidade();
+   /* if(TempCVT >= 90)
+      Critico_Temp = 1;
+    else
+      Critico_Temp = 0;
+    // Escreve os dados na mensagem CAN
+    MsgCAN[0] = ;
+    MsgCAN[1] = ;
+    MsgCAN[2] = ;*/
+    MsgCAN[3] = RPM;
+    MsgCAN[4] = Vel;
+    MsgCAN[5] = CAN_ID;
+    // Envia a Mensagem conforme a forma do cabeçalho
+    CAN.sendMsgBuf(CAN_ID, 0, 8, MsgCAN);
+  }
+  interrupts(); // Ativa interrupções
 
+}
+
+/*
+    Função para leitura da quantida de pulsos da homocinética
+    Utilizamos de interrupção para medir  , isso significa que cada pulso emitido será analisado.
+    Essa função será passada como a ISR(Rotina a ser seguida) da interrupção por isso seu retorno e 
+    parâmetros são VOID (seguindo regras de interrupção do Arduino)
+    Parâmetros : VOID
+    Return : VOID, Modifica
+ */
+void PulsoVelocidade() 
+{
+  /* 
+      Para calcular o RPM da homocinética é feita a seguinte fórmula:
+              RPM = [(1 / Período) * 1000 * 60] / 3
+      No nosso caso o período e dado pelo tempo entre os dois pulsos e que sai em milissegundos.
+      Sendo assim, para poder achar o RPM precisamos multiplicar por 1000 e depois por 60.
+      Como essa interrupção será chamada 3 vezes a cada volta completa da homocinética será
+      necessário dividir por 3 para ter o RPM da volta.
+  */
+  RPM_Homo = (60000/CRISTAS)/ (millis()- TempoVel);
+  TempoVel = millis();
+}
+
+/*
+    Função para o cálculo da velocidade angular do pneu
+    Parâmetros : VOID
+    Return : Inteiro do valor da velocidade
+ */
+unsigned int Velocidade()
+{
+  /*
+      Para calcular a velocidade em Km/h fazemos:
+                Vel = (RPM_Homo * COMPRIMENTO) / 60 Velocidade em metros por segundo
+                Vel = Vel * 3,6 Temos a velocidade em Km/h
+      O RPM mostra quantas voltas foram dadas em 1 minuto, se multimplicarmos pelo comprimento da roda temos
+      a distância em metros percorrida pela roda em 1 minuto, ao dividir por 60 teremos a distância em metros por segundo.
+      Então é feita a transformação para Km/h                
+   */
+   return (RPM_Homo * COMPRIMENTO / 60) * 3.6;
 }
 
 /*
@@ -92,6 +152,12 @@ void loop()
  */
 void PulsoRPM() 
 {
-  RPM = 60000/ (millis()- TempoPassado);
-  TempoPassado = millis();
+  /*
+      Para calcular o RPM é feita a seguinte fórmula:
+              RPM = (1 / Período) * 1000 * 60
+      No nosso caso o período e dado pelo tempo entre os dois pulsos e que sai em milissegundos.
+      Sendo assim, para poder achar o RPM precisamos multiplicar por 1000 e depois por 60.
+   */
+  RPM = 60000/ (millis()- TempoRPM);
+  TempoRPM = millis();
 }
