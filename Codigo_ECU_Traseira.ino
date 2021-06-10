@@ -35,7 +35,7 @@ mcp2515_can CAN(SPI_CS); // Cria classe da CAN
 unsigned char MsgCAN[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // Vetor da MSG CAN
 unsigned long int Tempo = 0;
 
-//RPM
+// RPM
 #define PIN_RPM 2
 volatile unsigned long int RPM = 0;
 volatile unsigned long int TempoRPM = 0; // Tempo do último pulso
@@ -43,7 +43,7 @@ volatile unsigned long int TempoRPM = 0; // Tempo do último pulso
 
 
 
-//VELOCIDADE
+// Velocidade
 #define PIN_Vel 3 
 #define DIAMETRO 0.51916  // Diametro efetivo da roda em metros
 #define COMPRIMENTO (PI * DIAMETRO) // Comprimento da roda
@@ -92,6 +92,11 @@ void loop()
     MsgCAN[0] = ;
     MsgCAN[1] = ;
     MsgCAN[2] = ;*/
+    SERIAL_PORT_MONITOR.printf("Seu RPM_Homo e: ");
+    SERIAL_PORT_MONITOR.println(RPM_Homo);
+    SERIAL_PORT_MONITOR.printf("Sua Velocidade e: ");
+    SERIAL_PORT_MONITOR.println(Vel);
+    SERIAL_PORT_MONITOR.println("======================");
     MsgCAN[3] = RPM;
     MsgCAN[4] = Vel;
     MsgCAN[5] = CAN_ID;
