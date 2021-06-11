@@ -15,21 +15,16 @@
 void PulsoRPM(); //RPM
 void PulsoVelocidade(); // Pulsos Velocidade
 unsigned int Velocidade();
+void Combustivel();
 
 //COMBUSTIVEL
 #define PIN_COMB1 9
 #define PIN_COMB2 8
 #define PIN_COMB3 7
-float valorTotal; //VARIAVEL PARA CALCULO DO TEMPO TOTAL
-float desceLed; //VARIAVEL PARA DESCER OS LEDS
-int ledsComb; //NÚMERO DE LEDS ACESOS
-bool primeira = true;   //VARIAVEL PARA PRIMEIRO CICLO E ENCHIMENTO DO TANQUE
-int tempComp = 0, tempMais = 0, tempMenos = 0, tempComp2 = 0, tempComp3 = 0, tempComp4 = 0; //VARIAVEIS PARA COMPARAR O TEMPO IDEAL COM O TEMPO USADO PARA CONSUMO
-bool flagCima = false, flagMedio = false, flagBaixo = false, flagMBaixo = false, flagCompTempo = false, flagCompTempo2 = false;   //VARIAVEIS PARA VERIFICAR AONDE ESTA O NIVEL DE COMBUSTIVEL
-int flagDesceCima = 0, flagDesceMedio = 0, flagDesceBaixo = 0, flagDesceMBaixo = 0, flagSobe = 0, flagVariacao = 0;
+int Comb1 = 0, Comb2 = 0 , Comb3 = 0; // Variáveis dos sensores do tanque (1 = Sensor mais alto)
 
 // Módulo CAN
-#define CAN_ID 0x02
+#define CAN_ID 0x10
 #define SPI_CS 10
 mcp2515_can CAN(SPI_CS); // Cria classe da CAN
 unsigned char MsgCAN[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // Vetor da MSG CAN
@@ -63,7 +58,9 @@ void setup()
   attachInterrupt(digitalPinToInterrupt(PIN_RPM), PulsoRPM, RISING);
   attachInterrupt(digitalPinToInterrupt(PIN_Vel), PulsoVelocidade, RISING);
   // Definição dos pinos
-  
+  pinMode(PIN_COMB1, INPUT);
+  pinMode(PIN_COMB2, INPUT);
+  pinMode(PIN_COMB3, INPUT);
   // Cria Comunicação Serial
   SERIAL_PORT_MONITOR.begin(115200);
   // Verifica se a Serial foi iniciada
@@ -84,22 +81,14 @@ void loop()
   if(Tempo%215 == 0) // Leitura de dados a cada 215 milissegundos
   {
     Vel = Velocidade();
-   /* if(TempCVT >= 90)
-      Critico_Temp = 1;
-    else
-      Critico_Temp = 0;
-    // Escreve os dados na mensagem CAN
-    MsgCAN[0] = ;
-    MsgCAN[1] = ;
-    MsgCAN[2] = ;*/
-    SERIAL_PORT_MONITOR.printf("Seu RPM_Homo e: ");
-    SERIAL_PORT_MONITOR.println(RPM_Homo);
-    SERIAL_PORT_MONITOR.printf("Sua Velocidade e: ");
-    SERIAL_PORT_MONITOR.println(Vel);
-    SERIAL_PORT_MONITOR.println("======================");
+    Combustivel();
+    MsgCAN[0] = Comb1;
+    MsgCAN[1] = Comb2;
+    MsgCAN[2] = Comb3;
     MsgCAN[3] = RPM;
     MsgCAN[4] = Vel;
     MsgCAN[5] = CAN_ID;
+    
     // Envia a Mensagem conforme a forma do cabeçalho
     CAN.sendMsgBuf(CAN_ID, 0, 8, MsgCAN);
   }
@@ -108,12 +97,24 @@ void loop()
 }
 
 /*
+    Função para leitura dos sensores capacitivos do tanque
+    Parâmetros : VOID
+    Return : VOID, Modifica os valores das variáveis dos sensores ( 1 = Ligado/Com combustível, 0 = Desligado)
+ */
+void Combustivel()
+{
+  Comb1 = digitalRead(PIN_COMB1);
+  Comb2 = digitalRead(PIN_COMB2);
+  Comb3 = digitalRead(PIN_COMB3);
+}
+
+/*
     Função para leitura da quantida de pulsos da homocinética
     Utilizamos de interrupção para medir  , isso significa que cada pulso emitido será analisado.
     Essa função será passada como a ISR(Rotina a ser seguida) da interrupção por isso seu retorno e 
     parâmetros são VOID (seguindo regras de interrupção do Arduino)
     Parâmetros : VOID
-    Return : VOID, Modifica
+    Return : VOID, Modifica valor do RPM_Homo
  */
 void PulsoVelocidade() 
 {
