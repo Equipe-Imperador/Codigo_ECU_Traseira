@@ -4,7 +4,7 @@
    31/05/2021
    Codigo ECU Traseira
    INPUTS:   Comb-1, Comb-2, Comb-3, RPM_MOTOR, VELOCIDADE
-   OUTPUTS:  MsgCAN{Velocidade, RPM, Comb-1, Comb-2, Comb-3, LitrosTanque , Vazio, Vazio}
+   OUTPUTS:  MsgCAN{Velocidade, RPM, Comb-1, Comb-2, Comb-3, LitrosTanque , CAN_ID, Vazio}
    Método de envio: Utilização de módulo CAN MCP2515
 */
 // Include de bibliotecas
@@ -96,6 +96,7 @@ void loop()
     MsgCAN[3] = CombVerdadeiro[1];
     MsgCAN[4] = CombVerdadeiro[2];
     MsgCAN[5] = LitrosTanque;
+    MsgCAN[6] = CAN_ID;
     
     // Envia a Mensagem conforme a forma do cabeçalho
     CAN.sendMsgBuf(CAN_ID, 0, 8, MsgCAN);
