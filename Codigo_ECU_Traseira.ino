@@ -2,26 +2,34 @@
    EQUIPE IMPERADOR DE BAJA-SAE UTFPR
    AUTOR: Juliana Moreira e Matheus Henrique Orsini da Silva
    31/05/2021
-   Codigo ECU Central
-   INPUTS:   COMBUSTÍVEL-1, COMBUSTÍVEL-2, COMBUSTÍVEL-3, RPM_MOTOR, VELOCIDADE
-   OUTPUTS:  MsgCAN{Velocidade, RPM, COMBUSTÍVEL-1, COMBUSTÍVEL-2, COMBUSTÍVEL-3, CAN_ID}
+   Codigo ECU Traseira
+   INPUTS:   Comb-1, Comb-2, Comb-3, RPM_MOTOR, VELOCIDADE
+   OUTPUTS:  MsgCAN{Velocidade, RPM, Comb-1, Comb-2, Comb-3, LitrosTanque , Vazio, Vazio}
    Método de envio: Utilização de módulo CAN MCP2515
 */
-// INCLUDE DAS BIBLIOTECAS
+// Include de bibliotecas
 #include "mcp2515_can.h" // Biblioteca módulo CAN
 #include <SPI.h> // Biblioteca de comunicação do módulo CAN
 
-// PROTÓTIPO DAS FUNÇÕES
+// Protótipo das funções
 void PulsoRPM(); //RPM
 void PulsoVelocidade(); // Pulsos Velocidade
 unsigned int Velocidade();
 void Combustivel();
 
-//COMBUSTIVEL
+// Combustivel
 #define PIN_COMB1 9
 #define PIN_COMB2 8
 #define PIN_COMB3 7
-int Comb1 = 0, Comb2 = 0 , Comb3 = 0; // Variáveis dos sensores do tanque (1 = Sensor mais alto)
+#define CONSUMO 0.07
+float LitrosTanque = 0;// Variável de aproximação de mililitros do tanque com base no consumo
+unsigned long int TempoComb = 0; // Variável para o tempo do ultimo abastecimento
+short int CombVerdadeiro[3] = {0,0,0}; // Vetor dos sensores do tanque (Esquerda o sensor mais alto)
+// Vetores de comparação
+short int CombAtual[3] = {0,0,0}; // Estado atual dos sensores
+short int CombPassado[3] = {0,0,0}; // Ultimo estado dos sensores
+short int CombRetrasado[3] = {0,0,0}; // Penultimo estado dos sensores
+short int CombVerdadeiroPassado[3] = {0,0,0}; // Ultimo estado do CombVerdadeiro
 
 // Módulo CAN
 #define CAN_ID 0x10
@@ -43,7 +51,7 @@ volatile unsigned long int TempoRPM = 0; // Tempo do último pulso
 #define DIAMETRO 0.51916  // Diametro efetivo da roda em metros
 #define COMPRIMENTO (PI * DIAMETRO) // Comprimento da roda
 #define CRISTAS 3 // Homocinética tem 3 cristas que vão ser captadas pelo sensor indutivo
-unsigned int Vel = 0;
+unsigned short int Vel = 0;
 volatile unsigned long int RPM_Homo = 0; // Variável para salvar o RPM da homocinetica
 volatile unsigned long int TempoVel = 0; // Tempo do último pulso
 
@@ -82,12 +90,12 @@ void loop()
   {
     Vel = Velocidade();
     Combustivel();
-    MsgCAN[0] = Comb1;
-    MsgCAN[1] = Comb2;
-    MsgCAN[2] = Comb3;
-    MsgCAN[3] = RPM;
-    MsgCAN[4] = Vel;
-    MsgCAN[5] = CAN_ID;
+    MsgCAN[0] = Vel;
+    MsgCAN[1] = RPM;
+    MsgCAN[2] = CombVerdadeiro[0];
+    MsgCAN[3] = CombVerdadeiro[1];
+    MsgCAN[4] = CombVerdadeiro[2];
+    MsgCAN[5] = LitrosTanque;
     
     // Envia a Mensagem conforme a forma do cabeçalho
     CAN.sendMsgBuf(CAN_ID, 0, 8, MsgCAN);
@@ -98,14 +106,102 @@ void loop()
 
 /*
     Função para leitura dos sensores capacitivos do tanque
+    Vão ser utilizados 3 vetores de comparação para verificar a veracidade das informações,
+    pois pode ocorrer mudanças bruscas de nivel do tanque devido ao terreno acidentado
+    Além disso, será analisado se houve um reabastecimento e calculado um valor aproximado em mL para o tanque
     Parâmetros : VOID
     Return : VOID, Modifica os valores das variáveis dos sensores ( 1 = Ligado/Com combustível, 0 = Desligado)
+                   Modifica o tempo do último abastecimento
+                   Modifica o valor aproximado do tanque
  */
 void Combustivel()
 {
-  Comb1 = digitalRead(PIN_COMB1);
-  Comb2 = digitalRead(PIN_COMB2);
-  Comb3 = digitalRead(PIN_COMB3);
+  TempoComb = millis();
+  // Laço de repetição para que as leituras atuais sejam passadas para os vetores antigos
+  for(int i = 0; i < 3; i++)
+  {
+    CombRetrasado[i] = CombPassado[i];
+    CombPassado[i] = CombAtual[i];
+  }
+  CombAtual[0] = digitalRead(PIN_COMB1);
+  CombAtual[1] = digitalRead(PIN_COMB2);
+  CombAtual[2] = digitalRead(PIN_COMB3);
+  
+  /* 
+      Se meus vetores de comparação tiverem o mesmo número quer dizer q nas últimas três medidas do sensor
+      o combustível estava naquela região, ou seja, quer dizer que o nível real do combustível é esse e que não
+      foi apenas um chacoalhão ocasionado pelo terreno, então posso atribuir esse valor para o meu CombVerdadeiro
+   */
+  if(CombRetrasado[0] == CombPassado[0] && CombPassado[0] == CombAtual[0])
+  {
+    CombVerdadeiroPassado[0] = CombVerdadeiro[0];
+    CombVerdadeiro[0] = CombAtual[0];
+  }
+  if(CombRetrasado[1] == CombPassado[1] && CombPassado[1] == CombAtual[1])
+  {
+    CombVerdadeiroPassado[1] = CombVerdadeiro[1];
+    CombVerdadeiro[1] = CombAtual[1];
+  }
+  if(CombRetrasado[2] == CombPassado[2] && CombPassado[2] == CombAtual[2])
+  {
+    CombVerdadeiroPassado[2] = CombVerdadeiro[2];
+    CombVerdadeiro[2] = CombAtual[2];
+  }
+  /*
+      Essa parte do código serve para verificar se ocorreu um enchimento do tanque e salvar o tempo dessa ocorrência
+      para que a parte de consumo consiga realizar seus códigos corretamente
+  */
+  // Se minha leitura verídica atual mostra que tem combustível em todos os sensores e a leitura verídica passada mostrava que não havia quer dizer que temos um abastecimento
+  // Funcional na condição que o carro foi abastecido depois de ter apagado todos os sensores (Condição ideal)
+  // Caso não seja nessa condição será necessário reiniciar o código
+  if(CombVerdadeiro[0] == 1 && CombVerdadeiro[1] == 1 && CombVerdadeiro[2] == 1 && CombVerdadeiroPassado[0] == 0 && CombVerdadeiroPassado[1] == 0 & CombVerdadeiroPassado[2] == 0)
+    TempoComb = millis(); // Salva o tempo do ultimo abastecimento
+  
+  /*  
+      A partir de agora é a parte do código que será responsável por criar uma aproximação de quantos litros
+      possuimos no tanque, esse cálculo será feito com base no dado de que o tanque cheio é capaz de rodas
+      por 1 hora e 30 minutos. Essa aproximação será feita para fazermos um acionamento mais suave dos LEDs
+      barra de 12 segmentos, pois se fosse utilizado somente os sensores para acender os LEDs, seu acionamento
+      seria em "pulos" e não ficaria agradável para o piloto
+
+      Faremos a aproximação de uma forma linear, ou seja:
+                Consumo = Total de Litros / Tempo de Consumo
+      Total de litros do tanque = 3600 mL
+      Tempo de consumo = 1 hora e 30 minutos =  3.600.000 milissegundos + 1.800.00 milissegundos = 5.400.000 ms
+                Consumo = 3600 mL / 5 400 000 =  0,0007 mL por ms ou 0,07 mL a cada 100ms
+   */
+   // Caso os sensores tiverem ativados sabemos exatamente qual o volume
+   if(CombVerdadeiro[0] == 1)
+   {   
+      LitrosTanque = 3600;   
+   }  
+   else if(CombVerdadeiro[1] == 1)
+   {
+      if(LitrosTanque >= 1500) // Enquanto for maior que volume teorico do segundo sensor
+      {
+        /*
+            Para fazer uma aproximação do volume de combustível iremos retirar o consumo a cada 100ms, ou seja,
+            se eu verificar qual é o tempo desde o último enchimento do tanque e fazer a divisão inteira por 100
+            irei obter quantas vezes foram consumidas os 0,07mL, então terei que pegar essa quantidade de vezes
+            multiplica-la por 0,07 e retirar esse valor do volume total do tanque
+         */
+        LitrosTanque = 3600 - (((int)(millis() - TempoComb) / 100) * CONSUMO);
+      }
+   }
+   else if(CombVerdadeiro[2] == 1)
+   {
+      if(LitrosTanque >= 500) // Enquanto for maior que volume teorico do terceiro sensor
+      {
+        LitrosTanque = 3600 - (((int)(millis() - TempoComb) / 100) * CONSUMO);
+      }
+   }
+   else if(CombVerdadeiro[2] == 0)
+   {
+      if(LitrosTanque > 0)
+        LitrosTanque = 3600 - (((int)(millis() - TempoComb) / 100) * CONSUMO);    
+      else
+        LitrosTanque = 0;
+   }
 }
 
 /*
