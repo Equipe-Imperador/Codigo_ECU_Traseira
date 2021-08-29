@@ -97,7 +97,7 @@ void loop()
     MsgCAN[4] = CombVerdadeiro[2];
     MsgCAN[5] = LitrosTanque;
     MsgCAN[6] = CAN_ID;
-    
+    RPM_Homo = 0;
     // Envia a Mensagem conforme a forma do cabeçalho
     CAN.sendMsgBuf(CAN_ID, 0, 8, MsgCAN);
   }
@@ -117,7 +117,6 @@ void loop()
  */
 void Combustivel()
 {
-  TempoComb = millis();
   // Laço de repetição para que as leituras atuais sejam passadas para os vetores antigos
   for(int i = 0; i < 3; i++)
   {
@@ -151,10 +150,10 @@ void Combustivel()
   /*
       Essa parte do código serve para verificar se ocorreu um enchimento do tanque e salvar o tempo dessa ocorrência
       para que a parte de consumo consiga realizar seus códigos corretamente
+      Se minha leitura verídica atual mostra que tem combustível em todos os sensores e a leitura verídica passada mostrava que não havia quer dizer que temos um abastecimento
+      Funcional na condição que o carro foi abastecido depois de ter apagado todos os sensores (Condição ideal)
+      Caso não seja nessa condição será necessário reiniciar o código
   */
-  // Se minha leitura verídica atual mostra que tem combustível em todos os sensores e a leitura verídica passada mostrava que não havia quer dizer que temos um abastecimento
-  // Funcional na condição que o carro foi abastecido depois de ter apagado todos os sensores (Condição ideal)
-  // Caso não seja nessa condição será necessário reiniciar o código
   if(CombVerdadeiro[0] == 1 && CombVerdadeiro[1] == 1 && CombVerdadeiro[2] == 1 && CombVerdadeiroPassado[0] == 0 && CombVerdadeiroPassado[1] == 0 & CombVerdadeiroPassado[2] == 0)
     TempoComb = millis(); // Salva o tempo do ultimo abastecimento
   
@@ -199,7 +198,7 @@ void Combustivel()
    else if(CombVerdadeiro[2] == 0)
    {
       if(LitrosTanque > 0)
-        LitrosTanque = 3600 - (((int)(millis() - TempoComb) / 100) * CONSUMO);    
+        LitrosTanque = 3600 - ((int)(millis() - TempoComb) / 100) * CONSUMO);    
       else
         LitrosTanque = 0;
    }
