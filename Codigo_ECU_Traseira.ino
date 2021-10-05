@@ -4,7 +4,7 @@
    31/05/2021
    Codigo ECU Traseira
    INPUTS:   Comb-1, Comb-2, Comb-3, RPM_MOTOR, VELOCIDADE
-   OUTPUTS:  MsgCAN{Velocidade, RPM, Comb-1, Comb-2, Comb-3, LitrosTanque , CAN_ID, Vazio}
+   OUTPUTS:  MsgCAN{Velocidade, RPM-Milhar, RPM-Dezena, Comb-1, Comb-2, Comb-3, LitrosTanque}
    Método de envio: Utilização de módulo CAN MCP2515
 */
 // Include de bibliotecas
@@ -14,8 +14,9 @@
 // Protótipo das funções
 void PulsoRPM(); //RPM
 void PulsoVelocidade(); // Pulsos Velocidade
-unsigned int Velocidade();
+unsigned int Velocidade(); // Calcular velocidade
 void Combustivel();
+void CalcRPM(unsigned int*, unsigned int*); // Separar RPM
 
 // Combustivel
 #define PIN_COMB1 9
@@ -32,10 +33,10 @@ short int CombRetrasado[3] = {0,0,0}; // Penultimo estado dos sensores
 short int CombVerdadeiroPassado[3] = {0,0,0}; // Ultimo estado do CombVerdadeiro
 
 // Módulo CAN
-#define CAN_ID 0x10
 #define SPI_CS 10
 mcp2515_can CAN(SPI_CS); // Cria classe da CAN
-unsigned char MsgCAN[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // Vetor da MSG CAN
+uint32_t CAN_ID = 0x10;
+byte MsgCAN[8] = {0}; // Vetor da MSG CAN 0-255
 unsigned long int Tempo = 0;
 
 // RPM
@@ -43,8 +44,7 @@ unsigned long int Tempo = 0;
 volatile unsigned long int RPM = 0;
 volatile unsigned long int TempoRPM = 0; // Tempo do último pulso
 // Essas variáveis são declaradas como volatile para garantir seu correto funcionamento na ISR e código normal
-
-
+unsigned int RPM_Mil = 0, RPM_Dez = 0; // Variáveis para separar o valor de 4 casas do RPM em 2 valores de 2 casas
 
 // Velocidade
 #define PIN_Vel 3 
@@ -54,7 +54,6 @@ volatile unsigned long int TempoRPM = 0; // Tempo do último pulso
 unsigned short int Vel = 0;
 volatile unsigned long int RPM_Homo = 0; // Variável para salvar o RPM da homocinetica
 volatile unsigned long int TempoVel = 0; // Tempo do último pulso
-
 
 void setup() 
 {
@@ -90,30 +89,44 @@ void loop()
   {
     Vel = Velocidade();
     Combustivel();
+    CalcRPM(&RPM_Mil, RPM_Dez);
     MsgCAN[0] = Vel;
-    MsgCAN[1] = RPM;
-    MsgCAN[2] = CombVerdadeiro[0];
-    MsgCAN[3] = CombVerdadeiro[1];
-    MsgCAN[4] = CombVerdadeiro[2];
-    MsgCAN[5] = LitrosTanque;
-    MsgCAN[6] = CAN_ID;
+    MsgCAN[1] = RPM_Mil;
+    MsgCAN[2] = RPM_Dez;
+    MsgCAN[3] = CombVerdadeiro[0];
+    MsgCAN[4] = CombVerdadeiro[1];
+    MsgCAN[5] = CombVerdadeiro[2];
+    MsgCAN[6] = LitrosTanque;
     RPM_Homo = 0;
     // Envia a Mensagem conforme a forma do cabeçalho
+
     CAN.sendMsgBuf(CAN_ID, 0, 8, MsgCAN);
   }
   interrupts(); // Ativa interrupções
 
 }
+/*
+    Função para separar o RPM.
+    Como um casa do vetor da CAN aceita somente um numero entre 0 e 255 não podemos enviar o RPM inteiro,
+    para isso será separado as primeiras duas casas das últimas duas casas em 2 variáveis.
+    Parâmetros : Endereço da Casa dos milhares, Endereço da Casa das dezenas.
+    Return : VOID, Modifica por referência os valores das variáveis de parâmetro.
+ */
+void CalcRPM(unsigned int* Milhar, unsigned int* Dezena)
+{
+   *Milhar = RPM / 100;
+   *Dezena = RPM % 100;
+}
 
 /*
-    Função para leitura dos sensores capacitivos do tanque
+    Função para leitura dos sensores capacitivos do tanque.
     Vão ser utilizados 3 vetores de comparação para verificar a veracidade das informações,
     pois pode ocorrer mudanças bruscas de nivel do tanque devido ao terreno acidentado
-    Além disso, será analisado se houve um reabastecimento e calculado um valor aproximado em mL para o tanque
-    Parâmetros : VOID
+    Além disso, será analisado se houve um reabastecimento e calculado um valor aproximado em mL para o tanque.
+    Parâmetros : VOID.
     Return : VOID, Modifica os valores das variáveis dos sensores ( 1 = Ligado/Com combustível, 0 = Desligado)
                    Modifica o tempo do último abastecimento
-                   Modifica o valor aproximado do tanque
+                   Modifica o valor aproximado do tanque.
  */
 void Combustivel()
 {
@@ -198,19 +211,21 @@ void Combustivel()
    else if(CombVerdadeiro[2] == 0)
    {
       if(LitrosTanque > 0)
-        LitrosTanque = 3600 - ((int)(millis() - TempoComb) / 100) * CONSUMO);    
+      {
+        LitrosTanque = 3600 - (((int)(millis() - TempoComb) / 100) * CONSUMO);
+      }
       else
         LitrosTanque = 0;
    }
 }
 
 /*
-    Função para leitura da quantida de pulsos da homocinética
+    Função para leitura da quantida de pulsos da homocinética.
     Utilizamos de interrupção para medir  , isso significa que cada pulso emitido será analisado.
     Essa função será passada como a ISR(Rotina a ser seguida) da interrupção por isso seu retorno e 
-    parâmetros são VOID (seguindo regras de interrupção do Arduino)
-    Parâmetros : VOID
-    Return : VOID, Modifica valor do RPM_Homo
+    parâmetros são VOID (seguindo regras de interrupção do Arduino).
+    Parâmetros : VOID.
+    Return : VOID, Modifica valor do RPM_Homo.
  */
 void PulsoVelocidade() 
 {
@@ -227,9 +242,9 @@ void PulsoVelocidade()
 }
 
 /*
-    Função para o cálculo da velocidade angular do pneu
-    Parâmetros : VOID
-    Return : Inteiro do valor da velocidade
+    Função para o cálculo da velocidade angular do pneu.
+    Parâmetros : VOID.
+    Return : Inteiro do valor da velocidade.
  */
 unsigned int Velocidade()
 {
@@ -245,12 +260,12 @@ unsigned int Velocidade()
 }
 
 /*
-    Função para leitura do RPM
+    Função para leitura do RPM.
     Utilizamos de interrupção para medir o RPM, isso significa que cada pulso emitido será analisado.
     Essa função será passada como a ISR(Rotina a ser seguida) da interrupção por isso seu retorno e 
-    parâmetros são VOID (seguindo regras de interrupção do Arduino)
-    Parâmetros : VOID
-    Return : VOID, Modifica o valor do RPM
+    parâmetros são VOID (seguindo regras de interrupção do Arduino).
+    Parâmetros : VOID.
+    Return : VOID, Modifica o valor do RPM.
  */
 void PulsoRPM() 
 {
