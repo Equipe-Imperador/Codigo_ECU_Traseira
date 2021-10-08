@@ -16,16 +16,16 @@ void PulsoRPM(); //RPM
 void PulsoVelocidade(); // Pulsos Velocidade
 unsigned int Velocidade(); // Calcular velocidade
 void Combustivel();
-void CalcRPM(unsigned int*, unsigned int*); // Separar RPM
-void CalcTanque(unsigned int*, unsigned int*); // Separar Litros do tanque
+void CalcRPM(unsigned short int*, unsigned short int*); // Separar RPM
+void CalcTanque(unsigned short int*, unsigned short int*); // Separar Litros do tanque
 
 // Combustivel
 #define PIN_COMB1 9
 #define PIN_COMB2 8
 #define PIN_COMB3 7
 #define CONSUMO 0.07
-float LitrosTanque = 0;// Variável de aproximação de mililitros do tanque com base no consumo
-unsigned int Litros = 0, Mililitros = 0; // Variável para separar valores decimais do litro
+unsigned int LitrosTanque = 0;// Variável de aproximação de mililitros do tanque com base no consumo
+unsigned short int Litros = 0, Mililitros = 0; // Variável para separar valores decimais do litro
 unsigned long int TempoComb = 0; // Variável para o tempo do ultimo abastecimento
 short int CombVerdadeiro[3] = {0,0,0}; // Vetor dos sensores do tanque (Esquerda o sensor mais alto)
 // Vetores de comparação
@@ -38,7 +38,7 @@ short int CombVerdadeiroPassado[3] = {0,0,0}; // Ultimo estado do CombVerdadeiro
 #define SPI_CS 10
 mcp2515_can CAN(SPI_CS); // Cria classe da CAN
 uint32_t CAN_ID = 0x10;
-byte MsgCAN[8] = {0}; // Vetor da MSG CAN 0-255
+unsigned char MsgCAN[8] = {0}; // Vetor da MSG CAN 0-255
 unsigned long int Tempo = 0;
 
 // RPM
@@ -46,7 +46,7 @@ unsigned long int Tempo = 0;
 volatile unsigned long int RPM = 0;
 volatile unsigned long int TempoRPM = 0; // Tempo do último pulso
 // Essas variáveis são declaradas como volatile para garantir seu correto funcionamento na ISR e código normal
-unsigned int RPM_Mil = 0, RPM_Dez = 0; // Variáveis para separar o valor de 4 casas do RPM em 2 valores de 2 casas
+unsigned short int RPM_Mil = 0, RPM_Dez = 0; // Variáveis para separar o valor de 4 casas do RPM em 2 valores de 2 casas
 
 // Velocidade
 #define PIN_Vel 3 
@@ -109,6 +109,7 @@ void loop()
   interrupts(); // Ativa interrupções
 
 }
+
 /*
     Função para separar o RPM.
     Como um casa do vetor da CAN aceita somente um numero entre 0 e 255 não podemos enviar o RPM inteiro,
@@ -116,11 +117,12 @@ void loop()
     Parâmetros : Endereço da Casa dos milhares, Endereço da Casa das dezenas.
     Return : VOID, Modifica por referência os valores das variáveis de parâmetro.
  */
-void CalcRPM(unsigned int* Milhar, unsigned int* Dezena)
+void CalcRPM(unsigned short int* Milhar, unsigned short int* Dezena)
 {
-   *Milhar = RPM / 100;
+   *Milhar = (unsigned short int)RPM / 100;
    *Dezena = RPM % 100;
 }
+
 /*
     Função para separar o nível de combustível do tanque.
     Como um casa do vetor da CAN aceita somente um numero entre 0 e 255 não podemos enviar o nível inteiro,
@@ -128,10 +130,10 @@ void CalcRPM(unsigned int* Milhar, unsigned int* Dezena)
     Parâmetros : Valor do nível do tanque, Endereço da Casa dos Litros , Endereço da Casa dos Mililitros.
     Return : VOID, Modifica por referência os valores das variáveis de parâmetro.
  */
-void CalcTanque(unsigned int* Litros, unsigned int* Mililitros)
+void CalcTanque(unsigned short int* Litros, unsigned short int* Mililitros)
 {
-  *Litros = (unsigned int)LitrosTanque;
-  *Mililitros = ((unsigned int)LitrosTanque*100) % 100;
+  *Litros = (unsigned short int)LitrosTanque / 100;
+  *Mililitros = LitrosTanque % 100;
 }
 
 /*
