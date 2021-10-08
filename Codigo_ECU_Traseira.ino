@@ -4,7 +4,7 @@
    31/05/2021
    Codigo ECU Traseira
    INPUTS:   Comb-1, Comb-2, Comb-3, RPM_MOTOR, VELOCIDADE
-   OUTPUTS:  MsgCAN{Velocidade, RPM-Milhar, RPM-Dezena, Comb-1, Comb-2, Comb-3, LitrosTanque}
+   OUTPUTS:  MsgCAN{Velocidade, RPM-Milhar, RPM-Dezena, Comb-1, Comb-2, Comb-3, Litros, Millitros}
    Método de envio: Utilização de módulo CAN MCP2515
 */
 // Include de bibliotecas
@@ -17,6 +17,7 @@ void PulsoVelocidade(); // Pulsos Velocidade
 unsigned int Velocidade(); // Calcular velocidade
 void Combustivel();
 void CalcRPM(unsigned int*, unsigned int*); // Separar RPM
+void CalcTanque(unsigned int*, unsigned int*); // Separar Litros do tanque
 
 // Combustivel
 #define PIN_COMB1 9
@@ -24,6 +25,7 @@ void CalcRPM(unsigned int*, unsigned int*); // Separar RPM
 #define PIN_COMB3 7
 #define CONSUMO 0.07
 float LitrosTanque = 0;// Variável de aproximação de mililitros do tanque com base no consumo
+unsigned int Litros = 0, Mililitros = 0; // Variável para separar valores decimais do litro
 unsigned long int TempoComb = 0; // Variável para o tempo do ultimo abastecimento
 short int CombVerdadeiro[3] = {0,0,0}; // Vetor dos sensores do tanque (Esquerda o sensor mais alto)
 // Vetores de comparação
@@ -89,14 +91,16 @@ void loop()
   {
     Vel = Velocidade();
     Combustivel();
-    CalcRPM(&RPM_Mil, RPM_Dez);
+    CalcRPM(&RPM_Mil, &RPM_Dez);
+    CalcTanque(&Litros, &Mililitros);
     MsgCAN[0] = Vel;
     MsgCAN[1] = RPM_Mil;
     MsgCAN[2] = RPM_Dez;
     MsgCAN[3] = CombVerdadeiro[0];
     MsgCAN[4] = CombVerdadeiro[1];
     MsgCAN[5] = CombVerdadeiro[2];
-    MsgCAN[6] = LitrosTanque;
+    MsgCAN[6] = Litros;
+    MsgCAN[7] = Mililitros;
     RPM_Homo = 0;
     // Envia a Mensagem conforme a forma do cabeçalho
 
@@ -116,6 +120,18 @@ void CalcRPM(unsigned int* Milhar, unsigned int* Dezena)
 {
    *Milhar = RPM / 100;
    *Dezena = RPM % 100;
+}
+/*
+    Função para separar o nível de combustível do tanque.
+    Como um casa do vetor da CAN aceita somente um numero entre 0 e 255 não podemos enviar o nível inteiro,
+    para isso será separado as primeiras duas casas das últimas duas casas em 2 variáveis.
+    Parâmetros : Valor do nível do tanque, Endereço da Casa dos Litros , Endereço da Casa dos Mililitros.
+    Return : VOID, Modifica por referência os valores das variáveis de parâmetro.
+ */
+void CalcTanque(unsigned int* Litros, unsigned int* Mililitros)
+{
+  *Litros = (unsigned int)LitrosTanque;
+  *Mililitros = ((unsigned int)LitrosTanque*100) % 100;
 }
 
 /*
