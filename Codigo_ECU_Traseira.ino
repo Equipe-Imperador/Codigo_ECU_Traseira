@@ -24,6 +24,7 @@ void CalcTanque(unsigned short int*, unsigned short int*); // Separar Litros do 
 #define PIN_COMB2 8
 #define PIN_COMB3 7
 #define CONSUMO 0.07
+#define TANQUE 3600 // Volume do tanque
 unsigned int LitrosTanque = 0;// Variável de aproximação de mililitros do tanque com base no consumo
 unsigned short int Litros = 0, Mililitros = 0; // Variável para separar valores decimais do litro
 unsigned long int TempoComb = 0; // Variável para o tempo do ultimo abastecimento
@@ -52,7 +53,7 @@ unsigned short int RPM_Mil = 0, RPM_Dez = 0; // Variáveis para separar o valor 
 #define PIN_Vel 3 
 #define DIAMETRO 0.51916  // Diametro efetivo da roda em metros
 #define COMPRIMENTO (PI * DIAMETRO) // Comprimento da roda
-#define CRISTAS 3 // Homocinética tem 3 cristas que vão ser captadas pelo sensor indutivo
+#define DENTES 1 // Dentes na roda fônica que vão ser lidos pelo sensor
 unsigned short int Vel = 0;
 volatile unsigned long int RPM_Homo = 0; // Variável para salvar o RPM da homocinetica
 volatile unsigned long int TempoVel = 0; // Tempo do último pulso
@@ -87,7 +88,7 @@ void loop()
 {
   Tempo = millis();
   noInterrupts(); // Desativa interrupções para enviar a MsgCAN
-  if(Tempo%215 == 0) // Leitura de dados a cada 215 milissegundos
+  if(Tempo%100 == 0) // Leitura de dados a cada 100 milissegundos
   {
     Vel = Velocidade();
     Combustivel();
@@ -204,7 +205,7 @@ void Combustivel()
    // Caso os sensores tiverem ativados sabemos exatamente qual o volume
    if(CombVerdadeiro[0] == 1)
    {   
-      LitrosTanque = 3600;   
+      LitrosTanque = TANQUE ;   
    }  
    else if(CombVerdadeiro[1] == 1)
    {
@@ -216,21 +217,21 @@ void Combustivel()
             irei obter quantas vezes foram consumidas os 0,07mL, então terei que pegar essa quantidade de vezes
             multiplica-la por 0,07 e retirar esse valor do volume total do tanque
          */
-        LitrosTanque = 3600 - (((int)(millis() - TempoComb) / 100) * CONSUMO);
+        LitrosTanque = TANQUE - (((int)(millis() - TempoComb) / 100) * CONSUMO);
       }
    }
    else if(CombVerdadeiro[2] == 1)
    {
       if(LitrosTanque >= 500) // Enquanto for maior que volume teorico do terceiro sensor
       {
-        LitrosTanque = 3600 - (((int)(millis() - TempoComb) / 100) * CONSUMO);
+        LitrosTanque = TANQUE - (((int)(millis() - TempoComb) / 100) * CONSUMO);
       }
    }
    else if(CombVerdadeiro[2] == 0)
    {
       if(LitrosTanque > 0)
       {
-        LitrosTanque = 3600 - (((int)(millis() - TempoComb) / 100) * CONSUMO);
+        LitrosTanque = TANQUE - (((int)(millis() - TempoComb) / 100) * CONSUMO);
       }
       else
         LitrosTanque = 0;
@@ -249,13 +250,13 @@ void PulsoVelocidade()
 {
   /* 
       Para calcular o RPM da homocinética é feita a seguinte fórmula:
-              RPM = [(1 / Período) * 1000 * 60] / 3
+              RPM = [(1 / Período) * 1000 * 60] / 1
       No nosso caso o período e dado pelo tempo entre os dois pulsos e que sai em milissegundos.
       Sendo assim, para poder achar o RPM precisamos multiplicar por 1000 e depois por 60.
-      Como essa interrupção será chamada 3 vezes a cada volta completa da homocinética será
-      necessário dividir por 3 para ter o RPM da volta.
+      Como essa interrupção será chamada 1 vez(es) a cada volta completa da homocinética será
+      necessário dividir por 1 para ter o RPM da volta.
   */
-  RPM_Homo = (60000/CRISTAS)/ (millis()- TempoVel);
+  RPM_Homo = (60000/DENTES)/ (millis()- TempoVel);
   TempoVel = millis();
 }
 
@@ -274,6 +275,7 @@ unsigned int Velocidade()
       a distância em metros percorrida pela roda em 1 minuto, ao dividir por 60 teremos a distância em metros por segundo.
       Então é feita a transformação para Km/h                
    */
+   RPM_Homo /= 7; // Temos que dividir pela faixa fixa de redução da caixa pois pegamos na entrada do primeiro eixo.
    return (RPM_Homo * COMPRIMENTO / 60) * 3.6;
 }
 
