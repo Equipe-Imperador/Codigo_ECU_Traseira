@@ -23,8 +23,10 @@ void CalcTanque(unsigned short int*, unsigned short int*); // Separar Litros do 
 #define PIN_COMB1 9
 #define PIN_COMB2 8
 #define PIN_COMB3 7
-#define CONSUMO 0.07
-#define TANQUE 3600 // Volume do tanque
+#define CONSUMO 0.6
+#define TANQUE 5200 // Volume do total tanque
+#define TANQUE1 2200 // Volume do tanque até 2 sensor
+#define TANQUE2 720 // Volume do tanque até 3 sensor
 unsigned int LitrosTanque = 0;// Variável de aproximação de mililitros do tanque com base no consumo
 unsigned short int Litros = 0, Mililitros = 0; // Variável para separar valores decimais do litro
 unsigned long int TempoComb = 0; // Variável para o tempo do ultimo abastecimento
@@ -186,21 +188,21 @@ void Combustivel()
       Funcional na condição que o carro foi abastecido depois de ter apagado todos os sensores (Condição ideal)
       Caso não seja nessa condição será necessário reiniciar o código
   */
-  if(CombVerdadeiro[0] == 1 && CombVerdadeiro[1] == 1 && CombVerdadeiro[2] == 1 && CombVerdadeiroPassado[0] == 0 && CombVerdadeiroPassado[1] == 0 & CombVerdadeiroPassado[2] == 0)
-    TempoComb = millis(); // Salva o tempo do ultimo abastecimento
+  if(CombVerdadeiro[0] == 1 && CombVerdadeiro[1] == 1 && CombVerdadeiro[2] == 1)
+    TempoComb = millis() / 1000; // Salva o tempo do ultimo momento com 3 sensores
   
   /*  
       A partir de agora é a parte do código que será responsável por criar uma aproximação de quantos litros
       possuimos no tanque, esse cálculo será feito com base no dado de que o tanque cheio é capaz de rodas
-      por 1 hora e 30 minutos. Essa aproximação será feita para fazermos um acionamento mais suave dos LEDs
+      por 2 hora e 30 minutos. Essa aproximação será feita para fazermos um acionamento mais suave dos LEDs
       barra de 12 segmentos, pois se fosse utilizado somente os sensores para acender os LEDs, seu acionamento
       seria em "pulos" e não ficaria agradável para o piloto
 
       Faremos a aproximação de uma forma linear, ou seja:
                 Consumo = Total de Litros / Tempo de Consumo
-      Total de litros do tanque = 3600 mL
-      Tempo de consumo = 1 hora e 30 minutos =  3.600.000 milissegundos + 1.800.00 milissegundos = 5.400.000 ms
-                Consumo = 3600 mL / 5 400 000 =  0,0007 mL por ms ou 0,07 mL a cada 100ms
+      Total de litros do tanque = 5200 mL
+      Tempo de consumo = 2 horas e 30 minutos =  7.200.000 milissegundos + 1.800.00 milissegundos = 5.400.000 ms
+                Consumo = 5200 mL / 9 000 000 =  0,0006 mL por ms ou 0,6 mL a cada 1s
    */
    // Caso os sensores tiverem ativados sabemos exatamente qual o volume
    if(CombVerdadeiro[0] == 1)
@@ -209,29 +211,37 @@ void Combustivel()
    }  
    else if(CombVerdadeiro[1] == 1)
    {
-      if(LitrosTanque >= 1500) // Enquanto for maior que volume teorico do segundo sensor
+      if(LitrosTanque > TANQUE1) // Enquanto for maior que volume teorico do segundo sensor
       {
         /*
-            Para fazer uma aproximação do volume de combustível iremos retirar o consumo a cada 100ms, ou seja,
-            se eu verificar qual é o tempo desde o último enchimento do tanque e fazer a divisão inteira por 100
-            irei obter quantas vezes foram consumidas os 0,07mL, então terei que pegar essa quantidade de vezes
-            multiplica-la por 0,07 e retirar esse valor do volume total do tanque
+            Para fazer uma aproximação do volume de combustível iremos retirar o consumo a cada 1s, ou seja,
+            se eu verificar qual é o tempo desde o último enchimento do tanque irei obter quantas vezes
+            foram consumidas os 0,6 mL, então terei que pegar essa quantidade de vezes
+            multiplica-la por 0,6 e retirar esse valor do volume total do tanque
          */
-        LitrosTanque = TANQUE - (((int)(millis() - TempoComb) / 100) * CONSUMO);
+        LitrosTanque = TANQUE - ((int)((millis()/1000) - TempoComb) * CONSUMO * 10);
+      }
+      else
+      {
+        LitrosTanque = TANQUE1;
       }
    }
    else if(CombVerdadeiro[2] == 1)
    {
-      if(LitrosTanque >= 500) // Enquanto for maior que volume teorico do terceiro sensor
+      if(LitrosTanque > TANQUE2) // Enquanto for maior que volume teorico do terceiro sensor
       {
-        LitrosTanque = TANQUE - (((int)(millis() - TempoComb) / 100) * CONSUMO);
+        LitrosTanque = TANQUE - ((int)((millis()/1000) - TempoComb) * CONSUMO * 10);
+      }
+      else
+      {
+        LitrosTanque = TANQUE2;
       }
    }
    else if(CombVerdadeiro[2] == 0)
    {
       if(LitrosTanque > 0)
       {
-        LitrosTanque = TANQUE - (((int)(millis() - TempoComb) / 100) * CONSUMO);
+        LitrosTanque = TANQUE - ((int)((millis()/1000) - TempoComb) * CONSUMO * 10);
       }
       else
         LitrosTanque = 0;
