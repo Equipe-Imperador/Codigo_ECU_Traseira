@@ -23,13 +23,13 @@ void CalcTanque(unsigned short int*, unsigned short int*); // Separar Litros do 
 #define PIN_COMB1 9
 #define PIN_COMB2 8
 #define PIN_COMB3 7
-#define CONSUMO 0.6
+#define CONSUMO 20
 #define TANQUE 5200 // Volume do total tanque
 #define TANQUE1 2200 // Volume do tanque até 2 sensor
 #define TANQUE2 720 // Volume do tanque até 3 sensor
 unsigned int LitrosTanque = 0;// Variável de aproximação de mililitros do tanque com base no consumo
 unsigned short int Litros = 0, Mililitros = 0; // Variável para separar valores decimais do litro
-unsigned long int TempoComb = 0; // Variável para o tempo do ultimo abastecimento
+unsigned long int TempoAbas = 0, TempoComb1 = 0; // Variável para o tempo do ultimo abastecimento
 short int CombVerdadeiro[3] = {0,0,0}; // Vetor dos sensores do tanque (Esquerda o sensor mais alto)
 // Vetores de comparação
 short int CombAtual[3] = {0,0,0}; // Estado atual dos sensores
@@ -76,14 +76,14 @@ void setup()
   // Cria Comunicação Serial
   SERIAL_PORT_MONITOR.begin(115200);
   // Verifica se a Serial foi iniciada
-  while(!Serial){};
+  /*while(!Serial){};
   // Verifica se a CAN foi iniciada
   while (CAN_OK != CAN.begin(CAN_500KBPS)) 
   {             
       SERIAL_PORT_MONITOR.println("CAN Falhou, tentando novamente...");
       delay(100);
   }
-  SERIAL_PORT_MONITOR.println("CAN Iniciada, Tudo OK!"); 
+  SERIAL_PORT_MONITOR.println("CAN Iniciada, Tudo OK!"); */
 }
 
 void loop() 
@@ -106,7 +106,7 @@ void loop()
     MsgCAN[7] = Mililitros;
     RPM_Homo = 0;
     // Envia a Mensagem conforme a forma do cabeçalho
-
+    SERIAL_PORT_MONITOR.println(LitrosTanque);
     CAN.sendMsgBuf(CAN_ID, 0, 8, MsgCAN);
   }
   interrupts(); // Ativa interrupções
@@ -189,7 +189,7 @@ void Combustivel()
       Caso não seja nessa condição será necessário reiniciar o código
   */
   if(CombVerdadeiro[0] == 1 && CombVerdadeiro[1] == 1 && CombVerdadeiro[2] == 1)
-    TempoComb = millis() / 1000; // Salva o tempo do ultimo momento com 3 sensores
+    TempoAbas = millis() / 1000; // Salva o tempo do ultimo momento com 3 sensores
   
   /*  
       A partir de agora é a parte do código que será responsável por criar uma aproximação de quantos litros
@@ -205,47 +205,38 @@ void Combustivel()
                 Consumo = 5200 mL / 9 000 000 =  0,0006 mL por ms ou 0,6 mL a cada 1s
    */
    // Caso os sensores tiverem ativados sabemos exatamente qual o volume
-   if(CombVerdadeiro[0] == 1)
-   {   
-      LitrosTanque = TANQUE ;   
-   }  
-   else if(CombVerdadeiro[1] == 1)
+   if(CombVerdadeiro[0] == 1)  
+      LitrosTanque = TANQUE;
+   else
    {
-      if(LitrosTanque > TANQUE1) // Enquanto for maior que volume teorico do segundo sensor
+      if(CombVerdadeiro[1] == 1)
       {
+         if(LitrosTanque > TANQUE1) // Enquanto for maior que volume teorico do segundo sensor
+          LitrosTanque = TANQUE - ((int)((millis()/1000) - TempoAbas) * CONSUMO * 10);
         /*
             Para fazer uma aproximação do volume de combustível iremos retirar o consumo a cada 1s, ou seja,
             se eu verificar qual é o tempo desde o último enchimento do tanque irei obter quantas vezes
             foram consumidas os 0,6 mL, então terei que pegar essa quantidade de vezes
             multiplica-la por 0,6 e retirar esse valor do volume total do tanque
          */
-        LitrosTanque = TANQUE - ((int)((millis()/1000) - TempoComb) * CONSUMO * 10);
+          else
+            LitrosTanque = TANQUE1;
+          TempoComb1 = millis()/1000;
       }
       else
       {
-        LitrosTanque = TANQUE1;
+        if(CombVerdadeiro[2] == 1)
+        {
+          if(LitrosTanque > TANQUE2) // Enquanto for maior que volume teorico do terceiro sensor
+            LitrosTanque = TANQUE1 - ((int)((millis()/1000) - TempoComb1) * CONSUMO * 10);
+          else
+            LitrosTanque = TANQUE2;
+        }
+        else
+          LitrosTanque = 0;
       }
    }
-   else if(CombVerdadeiro[2] == 1)
-   {
-      if(LitrosTanque > TANQUE2) // Enquanto for maior que volume teorico do terceiro sensor
-      {
-        LitrosTanque = TANQUE - ((int)((millis()/1000) - TempoComb) * CONSUMO * 10);
-      }
-      else
-      {
-        LitrosTanque = TANQUE2;
-      }
-   }
-   else if(CombVerdadeiro[2] == 0)
-   {
-      if(LitrosTanque > 0)
-      {
-        LitrosTanque = TANQUE - ((int)((millis()/1000) - TempoComb) * CONSUMO * 10);
-      }
-      else
-        LitrosTanque = 0;
-   }
+   
 }
 
 /*
