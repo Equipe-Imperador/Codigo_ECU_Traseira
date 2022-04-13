@@ -76,14 +76,14 @@ void setup()
   // Cria Comunicação Serial
   SERIAL_PORT_MONITOR.begin(115200);
   // Verifica se a Serial foi iniciada
-  /*while(!Serial){};
+  while(!Serial){};
   // Verifica se a CAN foi iniciada
   while (CAN_OK != CAN.begin(CAN_500KBPS)) 
   {             
       SERIAL_PORT_MONITOR.println("CAN Falhou, tentando novamente...");
       delay(100);
   }
-  SERIAL_PORT_MONITOR.println("CAN Iniciada, Tudo OK!"); */
+  SERIAL_PORT_MONITOR.println("CAN Iniciada, Tudo OK!"); 
 }
 
 void loop() 
@@ -106,7 +106,6 @@ void loop()
     MsgCAN[7] = Mililitros;
     RPM_Homo = 0;
     // Envia a Mensagem conforme a forma do cabeçalho
-    SERIAL_PORT_MONITOR.println(LitrosTanque);
     CAN.sendMsgBuf(CAN_ID, 0, 8, MsgCAN);
   }
   interrupts(); // Ativa interrupções
